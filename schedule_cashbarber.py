@@ -455,78 +455,60 @@ def create_appointment(
     try:
         save_btn = driver.find_element(By.XPATH, '//button[contains(., "Salvar agendamento")]')
         save_btn.click()
-        print("✓ Clicou em salvar")
+        print("Clicou em salvar")
         
         # Wait for response
         time.sleep(3)
         
-        # Check for popups/alerts
+        # Check for popups/alerts immediately after clicking save
         popup = capture_popup_content(driver)
         if popup["found"]:
-            print(f"\n⚠️ Popup detectado após salvar:")
+            print(f"\nPopup detectado apos salvar:")
             print(f"   Tipo: {popup['type']}")
-            print(f"   Conteúdo: {popup['text']}")
+            print(f"   Conteudo: {popup['text']}")
             
             # Check if it's an error popup
-            error_keywords = ['erro', 'error', 'falha', 'inválido', 'invalid', 'não', 'nao']
+            error_keywords = ['erro', 'error', 'falha', 'invalido', 'invalid', 'nao']
             is_error = any(keyword in popup['text'].lower() for keyword in error_keywords)
             
             if is_error:
                 error_msg = f"Erro no popup: {popup['text']}"
-                print(f"✗ {error_msg}")
+                print(f"ERRO: {error_msg}")
+                driver.save_screenshot('/tmp/error_popup.png')
                 raise Exception(error_msg)
-            else:
-                print("ℹ️ Popup informativo (não é erro)")
         
-        # Try to wait for modal to close
-        try:
-            wait.until(
-                EC.invisibility_of_element_located((By.XPATH, '//div[contains(@class, "modal-agendamento")]')),
-                message="Modal não fechou após salvar"
-            )
-            print("✓ Modal fechado - agendamento salvo com sucesso")
-        except TimeoutException:
-            # If modal doesn't close, check for success message
-            print("⚠️ Modal não fechou, verificando mensagens...")
-            
-            # Check again for popups (might appear after delay)
-            popup = capture_popup_content(driver)
-            if popup["found"]:
-                print(f"   Popup: {popup['text']}")
-                
-            # Look for success indicators
-            try:
-                success_elements = driver.find_elements(
-                    By.XPATH, 
-                    "//*[contains(text(), 'sucesso') or contains(text(), 'criado') or contains(text(), 'salvo') or contains(text(), 'success')]"
-                )
-                for elem in success_elements:
-                    if elem.is_displayed():
-                        print(f"✓ Mensagem de sucesso: {elem.text}")
-                        return
-            except:
-                pass
-            
-            # If no success message found, might still have worked
-            print("⚠️ Modal não fechou mas nenhum erro detectado. Considerando como sucesso.")
-            
+        # Wait for modal to close - this is the definitive success indicator
+        wait.until(
+            EC.invisibility_of_element_located((By.XPATH, '//div[contains(@class, "modal-agendamento")]'))
+        )
+        print("Modal fechado - agendamento salvo com sucesso!")
+        
+    except TimeoutException:
+        # Modal didn't close within timeout - this indicates failure
+        error_msg = "Timeout: Modal nao fechou apos 15 segundos. Agendamento pode nao ter sido criado."
+        print(f"\nERRO: {error_msg}")
+        
+        # Capture final state for debugging
+        popup = capture_popup_content(driver)
+        if popup["found"]:
+            error_msg += f"\nPopup detectado: {popup['text']}"
+        
+        driver.save_screenshot('/tmp/error_timeout.png')
+        print("Screenshot salvo: /tmp/error_timeout.png")
+        raise Exception(error_msg)
+        
     except Exception as e:
-        # On any error, capture popup content
-        print(f"\n✗ Erro ao salvar: {e}")
+        # Any other error during save
+        print(f"\nERRO ao salvar: {e}")
         popup = capture_popup_content(driver)
         
         if popup["found"]:
-            error_msg = f"Erro ao salvar agendamento: {str(e)}\nConteúdo do popup: {popup['text']}"
+            error_msg = f"Erro ao salvar agendamento: {str(e)}\nConteudo do popup: {popup['text']}"
         else:
             error_msg = f"Erro ao salvar agendamento: {str(e)}"
         
-        # Save screenshot
-        try:
-            driver.save_screenshot('/tmp/error_save.png')
-            print("Screenshot salvo: /tmp/error_save.png")
-        except:
-            pass
-        
+        driver.save_screenshot('/tmp/error_save.png')
+        print("Screenshot salvo: /tmp/error_save.png")
         raise Exception(error_msg)
 
 
