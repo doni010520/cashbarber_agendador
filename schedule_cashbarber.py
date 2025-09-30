@@ -235,6 +235,15 @@ def create_appointment(
     wait.until(
         EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "modal-agendamento")]'))
     )
+    print("✓ Modal detectado")
+    
+    # Wait for form fields inside modal to load
+    print("Aguardando campos do formulário carregarem...")
+    wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, 'select[aria-invalid]'))
+    )
+    print("✓ Campos do formulário carregados")
+    
     log_datetime_fields(driver, "Após abrir o modal")
 
     # Select appointment type (hardcoded to "Agendamento")
