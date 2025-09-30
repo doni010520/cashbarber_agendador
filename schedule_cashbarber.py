@@ -197,15 +197,20 @@ def create_appointment(
     )
     new_appointment_btn.click()
 
-    # 2. Esperar o modal carregar
-    wait.until(
-        EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "modal-agendamento")]'))
-    )
-    print("✓ Modal detectado e carregado")
+    # 2. Esperar o modal e seu conteúdo carregarem (CORREÇÃO APLICADA AQUI)
+    print("Aguardando o modal de agendamento e seu conteúdo...")
+    # Seletor mais robusto para o dropdown, baseado no texto do rótulo
+    tipo_agendamento_locator = (By.XPATH, "//div[div[contains(text(), 'Tipo de agendamento')]]//select")
+    
+    # Espera até que o dropdown esteja VISÍVEL antes de continuar
+    wait.until(EC.visibility_of_element_located(tipo_agendamento_locator))
+    print("✓ Modal e formulário carregados.")
+
 
     # 3. Preencher campos que disparam atualizações
     print("\nPreenchendo informações principais...")
-    select_dropdown_option(driver, (By.CSS_SELECTOR, 'select[aria-invalid]'), "Agendamento")
+    # Usa o novo seletor robusto
+    select_dropdown_option(driver, tipo_agendamento_locator, "Agendamento")
     autocomplete_select(driver, (By.ID, "age_id_cliente"), client_name)
     select_dropdown_option(driver, (By.XPATH, "//div[div[contains(text(), 'Filial')]]//select"), branch_name)
     select_dropdown_option(driver, (By.XPATH, "//div[div[contains(text(), 'Profissional')]]//select"), professional_name)
@@ -369,3 +374,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
