@@ -257,30 +257,6 @@ def capture_popup_content(driver: webdriver.Chrome):
     return popup_info
 
 
-def debug_date_field(driver: webdriver.Chrome, step: str, expected_date: str):
-    """Debug detalhado do campo de data."""
-    try:
-        # Ler o valor atual do campo
-        current_value = driver.execute_script("return document.getElementsByName('age_data')[0].value;")
-        
-        # Ler o atributo value direto
-        date_input = driver.find_element(By.NAME, "age_data")
-        attribute_value = date_input.get_attribute('value')
-        
-        # Ler propriedades do input
-        input_type = date_input.get_attribute('type')
-        
-        print(f"\n=== DEBUG DATA [{step}] ===")
-        print(f"Valor esperado: {expected_date}")
-        print(f"Valor no campo (JS): {current_value}")
-        print(f"Valor no campo (attr): {attribute_value}")
-        print(f"Tipo do input: {input_type}")
-        print(f"Match: {current_value == expected_date}")
-        print("="*40)
-    except Exception as e:
-        print(f"Erro no debug: {e}")
-
-
 def create_appointment(
     driver: webdriver.Chrome,
     client_name: str,
