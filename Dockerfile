@@ -35,11 +35,11 @@ COPY schedule_cashbarber.py .
 COPY api.py .
 
 # Expose port
-EXPOSE 5200
+EXPOSE 5000
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV PORT=5200
+ENV PORT=5000
 
 # Run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:5200", "--workers", "2", "--timeout", "120", "api:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "api:app"]
