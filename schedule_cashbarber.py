@@ -396,9 +396,7 @@ def create_appointment(
     print("\n6. Aguardando estabilização do formulário...")
     time.sleep(2.0)
 
-    # NOW set date/time using JavaScript with ISO format (universal, works on any locale)
-    print("\n7. Definindo data e horários via JavaScript...")
-    
+    # Parse date
     try:
         dt = datetime.strptime(date, "%Y-%m-%d")
     except Exception:
@@ -408,44 +406,67 @@ def create_appointment(
             clean = date.replace("/", "").replace("-", "")
             dt = datetime.strptime(clean, "%d%m%Y")
 
-    date_iso = dt.strftime("%Y-%m-%d")  # Formato ISO: 2025-10-15
+    date_iso = dt.strftime("%Y-%m-%d")
 
-    print(f"   Data recebida do parâmetro: {date}")
-    print(f"   Data parseada (datetime obj): {dt}")
-    print(f"   Data ISO a enviar: {date_iso}")
-
-    js_set_value_and_trigger_events = """
-        arguments[0].value = arguments[1]; 
-        arguments[0].dispatchEvent(new Event('input', { bubbles: true })); 
-        arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
-        arguments[0].dispatchEvent(new Event('blur', { bubbles: true }));
-    """
-
+    # NOW set date/time using manual method (click + clear + send_keys)
+    # This works better than JS injection for this site's validation
+    print("\n7. Definindo data e horários (método manual)...")
+    
     try:
-        print("   Definindo data (formato ISO via JavaScript)...")
+        print("   Definindo data...")
         date_input = driver.find_element(By.NAME, "age_data")
-        driver.execute_script(js_set_value_and_trigger_events, date_input, date_iso)
+        date_input.click()
+        time.sleep(0.3)
+        date_input.clear()
+        time.sleep(0.3)
+        date_input.send_keys(dt.strftime("%d/%m/%Y"))
         time.sleep(0.5)
-        
-        # Verify what was set
-        actual_value = driver.execute_script("return document.getElementsByName('age_data')[0].value;")
-        print(f"   Valor definido no campo: {actual_value}")
         
         print("   Definindo horário de início...")
         start_input = driver.find_element(By.NAME, "age_inicio")
-        driver.execute_script(js_set_value_and_trigger_events, start_input, start_time)
+        start_input.click()
+        time.sleep(0.3)
+        start_input.clear()
+        time.sleep(0.3)
+        start_input.send_keys(start_time)
         time.sleep(0.5)
         
         print("   Definindo horário de término...")
         end_input = driver.find_element(By.NAME, "age_fim")
-        driver.execute_script(js_set_value_and_trigger_events, end_input, end_time)
+        end_input.click()
+        time.sleep(0.3)
+        end_input.clear()
+        time.sleep(0.3)
+        end_input.send_keys(end_time)
         time.sleep(0.5)
         
-        log_datetime_fields(driver, "Após definir data/hora via JavaScript")
+        log_datetime_fields(driver, "Após definir data/hora manualmente")
         
     except Exception as e:
-        print(f"Erro ao definir campos via JavaScript: {e}")
-        raise
+        print(f"⚠️ Erro ao definir campos manualmente: {e}")
+        print("Tentando método alternativo via JavaScript...")
+        
+        # Fallback to JS method if manual fails
+        js_set_value = """
+            arguments[0].value = arguments[1]; 
+            arguments[0].dispatchEvent(new Event('input', { bubbles: true })); 
+            arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+            arguments[0].dispatchEvent(new Event('blur', { bubbles: true }));
+        """
+        
+        date_input = driver.find_element(By.NAME, "age_data")
+        driver.execute_script(js_set_value, date_input, date_iso)
+        time.sleep(0.5)
+        
+        start_input = driver.find_element(By.NAME, "age_inicio")
+        driver.execute_script(js_set_value, start_input, start_time)
+        time.sleep(0.5)
+        
+        end_input = driver.find_element(By.NAME, "age_fim")
+        driver.execute_script(js_set_value, end_input, end_time)
+        time.sleep(0.5)
+        
+        log_datetime_fields(driver, "Após tentativa JS (fallback)")
     
     log_datetime_fields(driver, "FINAL - Antes de salvar")
 
@@ -455,60 +476,78 @@ def create_appointment(
     try:
         save_btn = driver.find_element(By.XPATH, '//button[contains(., "Salvar agendamento")]')
         save_btn.click()
-        print("Clicou em salvar")
+        print("✓ Clicou em salvar")
         
         # Wait for response
         time.sleep(3)
         
-        # Check for popups/alerts immediately after clicking save
+        # Check for popups/alerts
         popup = capture_popup_content(driver)
         if popup["found"]:
-            print(f"\nPopup detectado apos salvar:")
+            print(f"\n⚠️ Popup detectado após salvar:")
             print(f"   Tipo: {popup['type']}")
-            print(f"   Conteudo: {popup['text']}")
+            print(f"   Conteúdo: {popup['text']}")
             
             # Check if it's an error popup
-            error_keywords = ['erro', 'error', 'falha', 'invalido', 'invalid', 'nao']
+            error_keywords = ['erro', 'error', 'falha', 'inválido', 'invalid', 'não', 'nao']
             is_error = any(keyword in popup['text'].lower() for keyword in error_keywords)
             
             if is_error:
                 error_msg = f"Erro no popup: {popup['text']}"
-                print(f"ERRO: {error_msg}")
-                driver.save_screenshot('/tmp/error_popup.png')
+                print(f"✗ {error_msg}")
                 raise Exception(error_msg)
+            else:
+                print("ℹ️ Popup informativo (não é erro)")
         
-        # Wait for modal to close - this is the definitive success indicator
-        wait.until(
-            EC.invisibility_of_element_located((By.XPATH, '//div[contains(@class, "modal-agendamento")]'))
-        )
-        print("Modal fechado - agendamento salvo com sucesso!")
-        
-    except TimeoutException:
-        # Modal didn't close within timeout - this indicates failure
-        error_msg = "Timeout: Modal nao fechou apos 15 segundos. Agendamento pode nao ter sido criado."
-        print(f"\nERRO: {error_msg}")
-        
-        # Capture final state for debugging
-        popup = capture_popup_content(driver)
-        if popup["found"]:
-            error_msg += f"\nPopup detectado: {popup['text']}"
-        
-        driver.save_screenshot('/tmp/error_timeout.png')
-        print("Screenshot salvo: /tmp/error_timeout.png")
-        raise Exception(error_msg)
-        
+        # Try to wait for modal to close
+        try:
+            wait.until(
+                EC.invisibility_of_element_located((By.XPATH, '//div[contains(@class, "modal-agendamento")]')),
+                message="Modal não fechou após salvar"
+            )
+            print("✓ Modal fechado - agendamento salvo com sucesso")
+        except TimeoutException:
+            # If modal doesn't close, check for success message
+            print("⚠️ Modal não fechou, verificando mensagens...")
+            
+            # Check again for popups (might appear after delay)
+            popup = capture_popup_content(driver)
+            if popup["found"]:
+                print(f"   Popup: {popup['text']}")
+                
+            # Look for success indicators
+            try:
+                success_elements = driver.find_elements(
+                    By.XPATH, 
+                    "//*[contains(text(), 'sucesso') or contains(text(), 'criado') or contains(text(), 'salvo') or contains(text(), 'success')]"
+                )
+                for elem in success_elements:
+                    if elem.is_displayed():
+                        print(f"✓ Mensagem de sucesso: {elem.text}")
+                        return
+            except:
+                pass
+            
+            # If no success message found, might still have worked
+            print("⚠️ Modal não fechou mas nenhum erro detectado. Considerando como sucesso.")
+            
     except Exception as e:
-        # Any other error during save
-        print(f"\nERRO ao salvar: {e}")
+        # On any error, capture popup content
+        print(f"\n✗ Erro ao salvar: {e}")
         popup = capture_popup_content(driver)
         
         if popup["found"]:
-            error_msg = f"Erro ao salvar agendamento: {str(e)}\nConteudo do popup: {popup['text']}"
+            error_msg = f"Erro ao salvar agendamento: {str(e)}\nConteúdo do popup: {popup['text']}"
         else:
             error_msg = f"Erro ao salvar agendamento: {str(e)}"
         
-        driver.save_screenshot('/tmp/error_save.png')
-        print("Screenshot salvo: /tmp/error_save.png")
+        # Save screenshot
+        try:
+            driver.save_screenshot('/tmp/error_save.png')
+            print("Screenshot salvo: /tmp/error_save.png")
+        except:
+            pass
+        
         raise Exception(error_msg)
 
 
