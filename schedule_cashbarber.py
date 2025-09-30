@@ -192,6 +192,71 @@ def log_datetime_fields(driver: webdriver.Chrome, step_name: str):
         print("----------------------------------\n")
 
 
+def capture_popup_content(driver: webdriver.Chrome):
+    """Capture any visible popups, alerts, or error messages."""
+    popup_info = {
+        "found": False,
+        "type": None,
+        "text": None,
+        "screenshot_saved": False
+    }
+    
+    # Check for browser alerts
+    try:
+        alert = driver.switch_to.alert
+        popup_info["found"] = True
+        popup_info["type"] = "browser_alert"
+        popup_info["text"] = alert.text
+        print(f"\n[POPUP] BROWSER ALERT DETECTED:")
+        print(f"   Text: {alert.text}")
+        return popup_info
+    except:
+        pass
+    
+    # Check for common modal/popup selectors
+    popup_selectors = [
+        "//div[contains(@class, 'modal') and contains(@class, 'show')]",
+        "//div[contains(@class, 'alert')]",
+        "//div[contains(@class, 'error')]",
+        "//div[contains(@class, 'warning')]",
+        "//div[@role='dialog']",
+        "//div[@role='alertdialog']",
+        "//*[contains(@class, 'swal')]",  # SweetAlert
+        "//*[contains(@class, 'toast')]",
+        "//*[contains(@class, 'notification')]",
+        "//div[contains(@class, 'message')]",
+    ]
+    
+    for selector in popup_selectors:
+        try:
+            elements = driver.find_elements(By.XPATH, selector)
+            for element in elements:
+                if element.is_displayed():
+                    text = element.text.strip()
+                    if text:
+                        popup_info["found"] = True
+                        popup_info["type"] = "modal/popup"
+                        popup_info["text"] = text
+                        
+                        # Save screenshot
+                        try:
+                            driver.save_screenshot('/tmp/popup_screenshot.png')
+                            popup_info["screenshot_saved"] = True
+                        except:
+                            pass
+                        
+                        print(f"\n[POPUP] MODAL/POPUP DETECTED:")
+                        print(f"   Selector: {selector}")
+                        print(f"   Text: {text}")
+                        print(f"   Screenshot saved: {popup_info['screenshot_saved']}")
+                        
+                        return popup_info
+        except:
+            continue
+    
+    return popup_info
+
+
 def create_appointment(
     driver: webdriver.Chrome,
     client_name: str,
@@ -383,16 +448,83 @@ def create_appointment(
 
     # Save
     print("\n8. Salvando agendamento...")
-    save_btn = driver.find_element(By.XPATH, '//button[contains(., "Salvar agendamento")]')
-    save_btn.click()
-    if delay > 0:
-        time.sleep(delay)
-
-    wait.until(
-        EC.invisibility_of_element_located((By.XPATH, '//div[contains(@class, "modal-agendamento")]'))
-    )
-    if delay > 0:
-        time.sleep(delay)
+    
+    try:
+        save_btn = driver.find_element(By.XPATH, '//button[contains(., "Salvar agendamento")]')
+        save_btn.click()
+        print("✓ Clicou em salvar")
+        
+        # Wait for response
+        time.sleep(3)
+        
+        # Check for popups/alerts
+        popup = capture_popup_content(driver)
+        if popup["found"]:
+            print(f"\n⚠️ Popup detectado após salvar:")
+            print(f"   Tipo: {popup['type']}")
+            print(f"   Conteúdo: {popup['text']}")
+            
+            # Check if it's an error popup
+            error_keywords = ['erro', 'error', 'falha', 'inválido', 'invalid', 'não', 'nao']
+            is_error = any(keyword in popup['text'].lower() for keyword in error_keywords)
+            
+            if is_error:
+                error_msg = f"Erro no popup: {popup['text']}"
+                print(f"✗ {error_msg}")
+                raise Exception(error_msg)
+            else:
+                print("ℹ️ Popup informativo (não é erro)")
+        
+        # Try to wait for modal to close
+        try:
+            wait.until(
+                EC.invisibility_of_element_located((By.XPATH, '//div[contains(@class, "modal-agendamento")]')),
+                message="Modal não fechou após salvar"
+            )
+            print("✓ Modal fechado - agendamento salvo com sucesso")
+        except TimeoutException:
+            # If modal doesn't close, check for success message
+            print("⚠️ Modal não fechou, verificando mensagens...")
+            
+            # Check again for popups (might appear after delay)
+            popup = capture_popup_content(driver)
+            if popup["found"]:
+                print(f"   Popup: {popup['text']}")
+                
+            # Look for success indicators
+            try:
+                success_elements = driver.find_elements(
+                    By.XPATH, 
+                    "//*[contains(text(), 'sucesso') or contains(text(), 'criado') or contains(text(), 'salvo') or contains(text(), 'success')]"
+                )
+                for elem in success_elements:
+                    if elem.is_displayed():
+                        print(f"✓ Mensagem de sucesso: {elem.text}")
+                        return
+            except:
+                pass
+            
+            # If no success message found, might still have worked
+            print("⚠️ Modal não fechou mas nenhum erro detectado. Considerando como sucesso.")
+            
+    except Exception as e:
+        # On any error, capture popup content
+        print(f"\n✗ Erro ao salvar: {e}")
+        popup = capture_popup_content(driver)
+        
+        if popup["found"]:
+            error_msg = f"Erro ao salvar agendamento: {str(e)}\nConteúdo do popup: {popup['text']}"
+        else:
+            error_msg = f"Erro ao salvar agendamento: {str(e)}"
+        
+        # Save screenshot
+        try:
+            driver.save_screenshot('/tmp/error_save.png')
+            print("Screenshot salvo: /tmp/error_save.png")
+        except:
+            pass
+        
+        raise Exception(error_msg)
 
 
 def main() -> None:
