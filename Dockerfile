@@ -39,7 +39,7 @@ EXPOSE 5200
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV PORT=5000
+ENV PORT=5200
 
 # Run the application
 CMD ["gunicorn", "--bind", "0.0.0.0:5200", "--workers", "2", "--timeout", "120", "api:app"]
