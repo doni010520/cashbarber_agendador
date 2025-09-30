@@ -42,4 +42,4 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=5000
 
 # Run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "api:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5200", "--workers", "2", "--timeout", "120", "api:app"]
