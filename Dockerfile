@@ -1,22 +1,22 @@
-# Utiliza a imagem oficial do Python 3.11 como base
+# Use Python 3.11 slim image
 FROM python:3.11-slim
 
-# --- INÍCIO DA MODIFICAÇÃO: Instalar e configurar o locale pt_BR ---
-# Instala o pacote de locales e remove o cache do apt para manter a imagem leve
-RUN apt-get update && apt-get install -y locales && rm -rf /var/lib/apt/lists/* && \
-    # Descomenta a linha do pt_BR.UTF-8 no arquivo de configuração de locales
-    sed -i -e 's/# pt_BR.UTF-8 UTF-8/pt_BR.UTF-8 UTF-8/' /etc/locale.gen && \
-    # Gera (compila) o locale pt_BR para que o sistema possa usá-lo
-    dpkg-reconfigure --frontend=noninteractive locales
+# ==========================================
+# CONFIGURAR LOCALE BRASILEIRO (FIX DE DATA)
+# ==========================================
+RUN apt-get update && apt-get install -y locales \
+    && echo "pt_BR.UTF-8 UTF-8" > /etc/locale.gen \
+    && locale-gen pt_BR.UTF-8 \
+    && update-locale LANG=pt_BR.UTF-8
 
-# Define as variáveis de ambiente do sistema para forçar o uso do locale brasileiro
-# Isso garante que a formatação de datas, números e moedas siga o padrão do Brasil
-ENV LANG pt_BR.UTF-8
-ENV LANGUAGE pt_BR:pt
-ENV LC_ALL pt_BR.UTF-8
-# --- FIM DA MODIFICAÇÃO ---
+ENV LANG=pt_BR.UTF-8
+ENV LANGUAGE=pt_BR:pt:en
+ENV LC_ALL=pt_BR.UTF-8
+ENV TZ=America/Sao_Paulo
 
-# Instala o Google Chrome e outras dependências necessárias
+# ==========================================
+# INSTALAR CHROME E DEPENDÊNCIAS
+# ==========================================
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -29,7 +29,9 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Instala o ChromeDriver correspondente à versão do Chrome instalada
+# ==========================================
+# INSTALAR CHROMEDRIVER (versão compatível)
+# ==========================================
 RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d '.' -f 1) && \
     CHROMEDRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_VERSION}") && \
     wget -q -O /tmp/chromedriver-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip" && \
@@ -38,25 +40,30 @@ RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d '.' -f 
     chmod +x /usr/local/bin/chromedriver && \
     rm -rf /tmp/chromedriver*
 
-# Define o diretório de trabalho da aplicação
+# ==========================================
+# CONFIGURAR APLICAÇÃO
+# ==========================================
+# Set working directory
 WORKDIR /app
 
-# Copia o arquivo de dependências primeiro para aproveitar o cache do Docker
+# Copy requirements first for better caching
 COPY requirements.txt .
 
-# Instala as dependências Python
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia os arquivos da aplicação para o diretório de trabalho
+# Copy application files
 COPY schedule_cashbarber.py .
 COPY api.py .
 
-# Expõe a porta que a aplicação Flask irá rodar
+# Expose port
 EXPOSE 5000
 
-# Define variáveis de ambiente para a execução
+# Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PORT=5000
 
-# Comando para iniciar a aplicação usando Gunicorn
+# ==========================================
+# INICIAR APLICAÇÃO
+# ==========================================
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "api:app"]
