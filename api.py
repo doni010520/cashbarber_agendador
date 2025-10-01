@@ -118,11 +118,17 @@ def create_appointment_api():
         print(f"   Data: {data['date']}")
         print(f"   Horário: {data['start_time']} - {data['end_time']}")
         
+        # Debug de credenciais (mascaradas)
+        print(f"🔐 Credenciais recebidas:")
+        print(f"   Email: {data['email'][:3]}***@{data['email'].split('@')[1] if '@' in data['email'] else '???'}")
+        print(f"   Senha: {'*' * len(data['password'])} ({len(data['password'])} caracteres)")
+        
         # Create driver and execute automation
         driver = create_driver()
         
         try:
-            login_to_cashbarber(driver, data['email'], data['password'])
+            # Timeout aumentado para 30 segundos
+            login_to_cashbarber(driver, data['email'], data['password'], timeout=30)
             open_appointments_page(driver)
             create_appointment(
                 driver,
