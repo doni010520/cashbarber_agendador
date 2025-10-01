@@ -52,7 +52,22 @@ def create_driver():
     options.add_experimental_option('useAutomationExtension', False)
     
     driver = webdriver.Chrome(options=options)
+    
+    # ===== DEBUG: VERIFICAR LOCALE DO CHROME =====
+    try:
+        locale_info = driver.execute_script("return navigator.language")
+        print(f"🌍 Chrome locale detectado: {locale_info}")
+        
+        # Debug extra: verificar locale do sistema também
+        import locale as py_locale
+        system_locale = py_locale.getlocale()
+        print(f"🖥️  Sistema locale: {system_locale}")
+    except Exception as e:
+        print(f"⚠️ Não foi possível detectar o locale: {e}")
+    # ============================================
+    
     return driver
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint."""
@@ -97,6 +112,12 @@ def create_appointment_api():
                 "error": "services must be a non-empty array"
             }), 400
         
+        # Log da requisição para debug
+        print(f"\n📥 Nova requisição recebida:")
+        print(f"   Cliente: {data['client']}")
+        print(f"   Data: {data['date']}")
+        print(f"   Horário: {data['start_time']} - {data['end_time']}")
+        
         # Create driver and execute automation
         driver = create_driver()
         
@@ -113,6 +134,8 @@ def create_appointment_api():
                 professional_name=data['professional'],
                 services=data['services']
             )
+            
+            print(f"✅ Agendamento criado com sucesso!")
             
             return jsonify({
                 "success": True,
@@ -133,7 +156,7 @@ def create_appointment_api():
             
     except Exception as e:
         error_trace = traceback.format_exc()
-        print(f"Error creating appointment: {error_trace}", file=sys.stderr)
+        print(f"❌ Erro ao criar agendamento: {error_trace}", file=sys.stderr)
         
         return jsonify({
             "success": False,
