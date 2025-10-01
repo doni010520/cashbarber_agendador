@@ -41,12 +41,18 @@ def create_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-blink-features=AutomationControlled")
+    
+    # Forçar locale brasileiro - SOLUÇÃO DO PROBLEMA DE DATA
+    options.add_argument("--lang=pt-BR")
+    options.add_experimental_option("prefs", {
+        "intl.accept_languages": "pt-BR,pt,en-US,en"
+    })
+    
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     
     driver = webdriver.Chrome(options=options)
     return driver
-
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint."""
