@@ -45,10 +45,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys  # para atalhos de teclado
 from datetime import datetime  # para analisar datas
-# --- ALTERAÇÃO INICIADA ---
-# Adicionada a importação da exceção específica para o tratamento do erro
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementClickInterceptedException
-# --- ALTERAÇÃO FINALIZADA ---
 
 
 def login_to_cashbarber(driver: webdriver.Chrome, email: str, password: str, timeout: int = 15, delay: float = 0.0) -> None:
@@ -216,19 +213,23 @@ def capture_popup_content(driver: webdriver.Chrome):
     except:
         pass
 
-    # Verifica seletores comuns de modais/pop-ups
+    # --- ALTERAÇÃO INICIADA ---
+    # Reordenada a lista para procurar primeiro por pop-ups mais específicos (swal, toast)
+    # que são mais prováveis de intercetar cliques, antes de procurar por modais genéricos.
     popup_selectors = [
-        "//div[contains(@class, 'modal') and contains(@class, 'show')]",
+        "//*[contains(@class, 'swal')]",  # SweetAlert (mais provável de ser o culpado)
+        "//*[contains(@class, 'toast')]",
         "//div[contains(@class, 'alert')]",
         "//div[contains(@class, 'error')]",
         "//div[contains(@class, 'warning')]",
-        "//div[@role='dialog']",
         "//div[@role='alertdialog']",
-        "//*[contains(@class, 'swal')]",  # SweetAlert
-        "//*[contains(@class, 'toast')]",
-        "//*[contains(@class, 'notification')]",
         "//div[contains(@class, 'message')]",
+        "//div[contains(@class, 'notification')]",
+        # O modal genérico é verificado por último para não ser confundido com o formulário principal
+        "//div[contains(@class, 'modal') and contains(@class, 'show') and not(contains(@class, 'modal-agendamento'))]",
+        "//div[@role='dialog']",
     ]
+    # --- ALTERAÇÃO FINALIZADA ---
 
     for selector in popup_selectors:
         try:
@@ -358,11 +359,11 @@ def create_appointment(
         print(f"    Adicionando: {service}")
         autocomplete_select(driver, (By.ID, "id_usuario_servico"), service)
 
-        # --- ALTERAÇÃO INICIADA ---
         # 1. Aguarda o pop-up de carregamento (SweetAlert) desaparecer antes de tentar clicar.
         print("    Aguardando o desaparecimento do pop-up de carregamento...")
         try:
-            wait.until(
+            # Aumenta o tempo de espera apenas para este ponto, pois pode haver validação do lado do servidor
+            WebDriverWait(driver, 5).until(
                 EC.invisibility_of_element_located((By.CLASS_NAME, "swal2-container"))
             )
         except TimeoutException:
@@ -392,7 +393,6 @@ def create_appointment(
             else:
                 print("✗ Um pop-up intercetou o clique, mas o conteúdo não pôde ser lido.")
                 raise  # Lança a exceção original ElementClickInterceptedException
-        # --- ALTERAÇÃO FINALIZADA ---
 
         if delay > 0:
             time.sleep(delay)
@@ -599,7 +599,7 @@ def main() -> None:
     driver = webdriver.Chrome(options=options)
 
     try:
-        login_to_cashberber(driver, args.email, args.password, delay=args.delay)
+        login_to_cashbarber(driver, args.email, args.password, delay=args.delay)
         open_appointments_page(driver, delay=args.delay)
         create_appointment(
             driver,
@@ -627,3 +627,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
