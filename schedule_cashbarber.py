@@ -213,9 +213,6 @@ def capture_popup_content(driver: webdriver.Chrome):
     except:
         pass
 
-    # --- ALTERAÇÃO INICIADA ---
-    # Reordenada a lista para procurar primeiro por pop-ups mais específicos (swal, toast)
-    # que são mais prováveis de intercetar cliques, antes de procurar por modais genéricos.
     popup_selectors = [
         "//*[contains(@class, 'swal')]",  # SweetAlert (mais provável de ser o culpado)
         "//*[contains(@class, 'toast')]",
@@ -229,7 +226,6 @@ def capture_popup_content(driver: webdriver.Chrome):
         "//div[contains(@class, 'modal') and contains(@class, 'show') and not(contains(@class, 'modal-agendamento'))]",
         "//div[@role='dialog']",
     ]
-    # --- ALTERAÇÃO FINALIZADA ---
 
     for selector in popup_selectors:
         try:
@@ -331,77 +327,8 @@ def create_appointment(
     if delay > 0:
         time.sleep(delay)
     log_datetime_fields(driver, "Após selecionar o cliente")
-
-    # Define a Filial e o Profissional PRIMEIRO
-    print("\n3. Selecionando filial...")
-    select_dropdown_option(
-        driver,
-        (By.XPATH, "//div[div[contains(text(), 'Filial')]]//select"),
-        branch_name
-    )
-    if delay > 0:
-        time.sleep(delay)
-    log_datetime_fields(driver, "Após selecionar a filial")
-
-    print("\n4. Selecionando profissional...")
-    select_dropdown_option(
-        driver,
-        (By.XPATH, "//div[div[contains(text(), 'Profissional')]]//select"),
-        professional_name
-    )
-    if delay > 0:
-        time.sleep(delay)
-    log_datetime_fields(driver, "Após selecionar o profissional")
-
-    # Adiciona serviços ANTES de definir data/hora
-    print("\n5. Adicionando serviços...")
-    for service in services:
-        print(f"    Adicionando: {service}")
-        autocomplete_select(driver, (By.ID, "id_usuario_servico"), service)
-
-        # 1. Aguarda o pop-up de carregamento (SweetAlert) desaparecer antes de tentar clicar.
-        print("    Aguardando o desaparecimento do pop-up de carregamento...")
-        try:
-            # Aumenta o tempo de espera apenas para este ponto, pois pode haver validação do lado do servidor
-            WebDriverWait(driver, 5).until(
-                EC.invisibility_of_element_located((By.CLASS_NAME, "swal2-container"))
-            )
-        except TimeoutException:
-            print("    Pop-up de carregamento não desapareceu, mas prosseguindo com cautela.")
-            pass  # Continua mesmo se o pop-up não desaparecer a tempo
-
-        if delay > 0:
-            time.sleep(delay)
-
-        plus_btn_locator = (
-            By.XPATH,
-            "//input[@id='id_usuario_servico']/ancestor::div[contains(@class, 'col-sm-11')]/following-sibling::div[contains(@class, 'col-sm-1')]//button"
-        )
-        plus_btn = wait.until(EC.element_to_be_clickable(plus_btn_locator))
-
-        # 2. Tenta clicar no botão e, se for intercetado, captura o conteúdo do pop-up.
-        try:
-            plus_btn.click()
-        except ElementClickInterceptedException:
-            print("\n⚠️ Clique no botão '+' foi intercetado. Capturando conteúdo do pop-up...")
-            popup = capture_popup_content(driver)
-
-            if popup["found"]:
-                error_msg = f"O clique foi bloqueado por um pop-up com a mensagem: '{popup['text']}'"
-                print(f"✗ {error_msg}")
-                raise Exception(error_msg)
-            else:
-                print("✗ Um pop-up intercetou o clique, mas o conteúdo não pôde ser lido.")
-                raise  # Lança a exceção original ElementClickInterceptedException
-
-        if delay > 0:
-            time.sleep(delay)
-
-    log_datetime_fields(driver, "Após adicionar serviços")
-
-    # Aguarda mais tempo para que quaisquer operações assíncronas sejam concluídas
-    print("\n6. Aguardando estabilização do formulário...")
-    time.sleep(2.0)
+    
+    # --- ALTERAÇÃO DE ORDEM INICIADA ---
 
     # Analisa a data
     try:
@@ -412,13 +339,9 @@ def create_appointment(
         except Exception:
             clean = date.replace("/", "").replace("-", "")
             dt = datetime.strptime(clean, "%d%m%Y")
-
-    date_iso = dt.strftime("%Y-%m-%d")
-
-    # AGORA define data/hora usando o método manual (clique + limpar + send_keys)
-    # Isto funciona melhor do que a injeção de JS para a validação deste site
-    print("\n7. Definindo data e horários (método manual)...")
-
+    
+    # Define data/hora usando o método manual
+    print("\n3. Definindo data e horários (método manual)...")
     try:
         print("    Definindo data...")
         date_input = driver.find_element(By.NAME, "age_data")
@@ -446,66 +369,133 @@ def create_appointment(
         time.sleep(0.3)
         end_input.send_keys(end_time)
         time.sleep(0.5)
-
+        
         log_datetime_fields(driver, "Após definir data/hora manualmente")
 
     except Exception as e:
         print(f"⚠️ Erro ao definir campos manualmente: {e}")
         print("Tentando método alternativo via JavaScript...")
-
-        # Recorre ao método JS se o manual falhar
+        
+        date_iso = dt.strftime("%Y-%m-%d")
         js_set_value = """
             arguments[0].value = arguments[1]; 
             arguments[0].dispatchEvent(new Event('input', { bubbles: true })); 
             arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
             arguments[0].dispatchEvent(new Event('blur', { bubbles: true }));
         """
-
+        
         date_input = driver.find_element(By.NAME, "age_data")
         driver.execute_script(js_set_value, date_input, date_iso)
         time.sleep(0.5)
-
+        
         start_input = driver.find_element(By.NAME, "age_inicio")
         driver.execute_script(js_set_value, start_input, start_time)
         time.sleep(0.5)
-
+        
         end_input = driver.find_element(By.NAME, "age_fim")
         driver.execute_script(js_set_value, end_input, end_time)
         time.sleep(0.5)
-
+        
         log_datetime_fields(driver, "Após tentativa JS (fallback)")
+
+    # Define a Filial
+    print("\n4. Selecionando filial...")
+    select_dropdown_option(
+        driver,
+        (By.XPATH, "//div[div[contains(text(), 'Filial')]]//select"),
+        branch_name
+    )
+    if delay > 0:
+        time.sleep(delay)
+    log_datetime_fields(driver, "Após selecionar a filial")
+
+    # Define o Profissional
+    print("\n5. Selecionando profissional...")
+    select_dropdown_option(
+        driver,
+        (By.XPATH, "//div[div[contains(text(), 'Profissional')]]//select"),
+        professional_name
+    )
+    if delay > 0:
+        time.sleep(delay)
+    log_datetime_fields(driver, "Após selecionar o profissional")
+    
+    # Adiciona serviços
+    print("\n6. Adicionando serviços...")
+    for service in services:
+        print(f"    Adicionando: {service}")
+        autocomplete_select(driver, (By.ID, "id_usuario_servico"), service)
+
+        # Aguarda o pop-up de carregamento (SweetAlert) desaparecer antes de tentar clicar.
+        print("    Aguardando o desaparecimento do pop-up de carregamento...")
+        try:
+            WebDriverWait(driver, 5).until(
+                EC.invisibility_of_element_located((By.CLASS_NAME, "swal2-container"))
+            )
+        except TimeoutException:
+            print("    Pop-up de carregamento não desapareceu, mas prosseguindo com cautela.")
+            pass
+
+        if delay > 0:
+            time.sleep(delay)
+
+        plus_btn_locator = (
+            By.XPATH,
+            "//input[@id='id_usuario_servico']/ancestor::div[contains(@class, 'col-sm-11')]/following-sibling::div[contains(@class, 'col-sm-1')]//button"
+        )
+        plus_btn = wait.until(EC.element_to_be_clickable(plus_btn_locator))
+        
+        try:
+            plus_btn.click()
+        except ElementClickInterceptedException:
+            print("\n⚠️ Clique no botão '+' foi intercetado. Capturando conteúdo do pop-up...")
+            popup = capture_popup_content(driver)
+
+            if popup["found"]:
+                error_msg = f"O clique foi bloqueado por um pop-up com a mensagem: '{popup['text']}'"
+                print(f"✗ {error_msg}")
+                raise Exception(error_msg)
+            else:
+                print("✗ Um pop-up intercetou o clique, mas o conteúdo não pôde ser lido.")
+                raise
+
+        if delay > 0:
+            time.sleep(delay)
+
+    log_datetime_fields(driver, "Após adicionar serviços")
+    
+    # --- ALTERAÇÃO DE ORDEM FINALIZADA ---
 
     log_datetime_fields(driver, "FINAL - Antes de salvar")
 
     # Guardar
-    print("\n8. Salvando agendamento...")
-
+    print("\n7. Salvando agendamento...")
+    
     try:
         save_btn = driver.find_element(By.XPATH, '//button[contains(., "Salvar agendamento")]')
         save_btn.click()
         print("✓ Clicou em salvar")
-
+        
         # Aguarda pela resposta
         time.sleep(3)
-
+        
         # Verifica pop-ups/alertas
         popup = capture_popup_content(driver)
         if popup["found"]:
             print(f"\n⚠️ Popup detetado após salvar:")
             print(f"  Tipo: {popup['type']}")
             print(f"  Conteúdo: {popup['text']}")
-
-            # Verifica se é um pop-up de erro
+            
             error_keywords = ['erro', 'error', 'falha', 'inválido', 'invalid', 'não', 'nao']
             is_error = any(keyword in popup['text'].lower() for keyword in error_keywords)
-
+            
             if is_error:
                 error_msg = f"Erro no popup: {popup['text']}"
                 print(f"✗ {error_msg}")
                 raise Exception(error_msg)
             else:
                 print("ℹ️ Popup informativo (não é erro)")
-
+        
         # Tenta aguardar que o modal feche
         try:
             wait.until(
@@ -514,18 +504,15 @@ def create_appointment(
             )
             print("✓ Modal fechado - agendamento salvo com sucesso")
         except TimeoutException:
-            # Se o modal não fechar, verifica mensagens de sucesso
             print("⚠️ Modal não fechou, verificando mensagens...")
-
-            # Verifica novamente por pop-ups (podem aparecer com atraso)
+            
             popup = capture_popup_content(driver)
             if popup["found"]:
                 print(f"  Popup: {popup['text']}")
-
-            # Procura por indicadores de sucesso
+                
             try:
                 success_elements = driver.find_elements(
-                    By.XPATH,
+                    By.XPATH, 
                     "//*[contains(text(), 'sucesso') or contains(text(), 'criado') or contains(text(), 'salvo') or contains(text(), 'success')]"
                 )
                 for elem in success_elements:
@@ -534,27 +521,24 @@ def create_appointment(
                         return
             except:
                 pass
-
-            # Se nenhuma mensagem de sucesso for encontrada, pode ter funcionado mesmo assim
+            
             print("⚠️ Modal não fechou mas nenhum erro detetado. Considerando como sucesso.")
-
+            
     except Exception as e:
-        # Em qualquer erro, captura o conteúdo do pop-up
         print(f"\n✗ Erro ao salvar: {e}")
         popup = capture_popup_content(driver)
-
+        
         if popup["found"]:
             error_msg = f"Erro ao salvar agendamento: {str(e)}\nConteúdo do popup: {popup['text']}"
         else:
             error_msg = f"Erro ao salvar agendamento: {str(e)}"
-
-        # Guarda a captura de ecrã
+        
         try:
             driver.save_screenshot('/tmp/error_save.png')
             print("Captura de ecrã salva: /tmp/error_save.png")
         except:
             pass
-
+        
         raise Exception(error_msg)
 
 
