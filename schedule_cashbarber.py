@@ -36,60 +36,48 @@ automatizar ações em qualquer site.
 import argparse
 import sys
 from typing import List
-import time  # Adicionado para atrasos opcionais
+import time
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys  # para atalhos de teclado
-from datetime import datetime  # para analisar datas
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementClickInterceptedException
-
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 def login_to_cashbarber(driver: webdriver.Chrome, email: str, password: str, timeout: int = 15, delay: float = 0.0) -> None:
     """Autentica o usuário no painel CashBarber."""
     driver.get("https://painel.cashbarber.com.br/auth/login")
     wait = WebDriverWait(driver, timeout)
     print("Aguardando campo de e-mail...")
-    email_input = wait.until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, 'input[placeholder="Informe o seu e-mail"]'))
-    )
+    email_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[placeholder="Informe o seu e-mail"]')))
     print("Aguardando campo de senha...")
-    password_input = wait.until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, 'input[placeholder="Informe sua senha"]'))
-    )
+    password_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[placeholder="Informe sua senha"]')))
+    
     print("Preenchendo credenciais...")
     email_input.clear()
     email_input.send_keys(email)
     password_input.clear()
     password_input.send_keys(password)
+    
     print("Aguardando botão de login...")
-    login_button = wait.until(
-        EC.element_to_be_clickable((By.XPATH, '//button[contains(normalize-space(), "Acessar")]'))
-    )
+    login_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//button[contains(normalize-space(), "Acessar")]')))
     print("Clicando no botão de login...")
     login_button.click()
+    
     print("Aguardando o carregamento do painel de controle...")
-    wait.until(
-        EC.presence_of_element_located((By.XPATH, '//span[contains(., "Olá,")]'))
-    )
+    wait.until(EC.presence_of_element_located((By.XPATH, '//span[contains(., "Olá,")]')))
     print("Login realizado com sucesso!")
     if delay > 0:
         time.sleep(delay)
-
 
 def open_appointments_page(driver: webdriver.Chrome, timeout: int = 15, delay: float = 0.0) -> None:
     """Navega para a seção de Agendamentos após o login."""
     driver.get("https://painel.cashbarber.com.br/agendamento")
     wait = WebDriverWait(driver, timeout)
-    wait.until(
-        EC.element_to_be_clickable((By.XPATH, '//button[contains(., "Novo agendamento")]'))
-    )
+    wait.until(EC.element_to_be_clickable((By.XPATH, '//button[contains(., "Novo agendamento")]')))
     if delay > 0:
         time.sleep(delay)
-
 
 def select_dropdown_option(driver: webdriver.Chrome, select_locator: tuple, option_text: str) -> None:
     """Seleciona uma opção de um elemento HTML `<select>` nativo pelo texto visível."""
@@ -100,7 +88,6 @@ def select_dropdown_option(driver: webdriver.Chrome, select_locator: tuple, opti
             return
     raise NoSuchElementException(f"Opção '{option_text}' não encontrada no select")
 
-
 def autocomplete_select(driver: webdriver.Chrome, input_locator: tuple, value: str, timeout: int = 10) -> None:
     """Seleciona um valor de um widget de autocompletar digitando e escolhendo a primeira sugestão."""
     wait = WebDriverWait(driver, timeout)
@@ -108,90 +95,42 @@ def autocomplete_select(driver: webdriver.Chrome, input_locator: tuple, value: s
     input_element.clear()
     input_element.send_keys(value)
     try:
-        suggestions_container = wait.until(
-            EC.presence_of_element_located((By.XPATH, '//div[@role="presentation"]//li[1]'))
-        )
+        suggestions_container = wait.until(EC.presence_of_element_located((By.XPATH, '//div[@role="presentation"]//li[1]')))
         suggestions_container.click()
     except TimeoutException:
         input_element.send_keys("\n")
 
-
-def log_datetime_fields(driver: webdriver.Chrome, step_name: str):
-    """Registra os valores atuais dos campos de data e hora para depuração."""
-    try:
-        date_val = driver.execute_script("return document.getElementsByName('age_data')[0].value;")
-        start_val = driver.execute_script("return document.getElementsByName('age_inicio')[0].value;")
-        end_val = driver.execute_script("return document.getElementsByName('age_fim')[0].value;")
-        print(f"\n--- LOG [{step_name}] ---")
-        print(f"    Data atual: '{date_val}'")
-        print(f"    Início atual: '{start_val}'")
-        print(f"    Fim atual: '{end_val}'")
-        print("----------------------------------\n")
-    except Exception as e:
-        print(f"\n--- LOG [{step_name}] ---")
-        print(f"    Não foi possível ler os campos de data/hora: {e}")
-        print("----------------------------------\n")
-
-# --- NOVO HELPER DE FALLBACK ---
 def handle_sweetalert_popup(driver: webdriver.Chrome, timeout: int = 3):
-    """
-    Verifica se um pop-up SweetAlert está visível e tenta fechá-lo clicando no botão de confirmação.
-    """
+    """Verifica e fecha um pop-up SweetAlert se ele aparecer."""
     try:
-        # Usa uma espera curta para ver se o pop-up aparece
         wait = WebDriverWait(driver, timeout)
-        swal_container = wait.until(
-            EC.visibility_of_element_located((By.XPATH, "//*[contains(@class, 'swal2-container')]"))
-        )
+        swal_container = wait.until(EC.visibility_of_element_located((By.XPATH, "//*[contains(@class, 'swal2-container')]")))
         print("    [Popup Handler] SweetAlert detectado.")
         
-        # Tenta encontrar e clicar no botão "OK" ou "Confirmar"
         try:
             confirm_button = swal_container.find_element(By.XPATH, ".//button[contains(@class, 'swal2-confirm')]")
             print("    [Popup Handler] Clicando no botão 'OK' do pop-up.")
             confirm_button.click()
-            
-            # Aguarda o pop-up desaparecer após o clique para confirmar que foi fechado
-            WebDriverWait(driver, 5).until(EC.invisibility_of_element(swal_container))
+            wait.until(EC.invisibility_of_element(swal_container))
             print("    [Popup Handler] Pop-up fechado com sucesso.")
         except (NoSuchElementException, TimeoutException):
-            print("    [Popup Handler] AVISO: Pop-up detectado, mas não foi possível fechá-lo.")
-            # Se não conseguir fechar, apenas segue em frente e deixa a próxima ação falhar (se for o caso)
+            print("    [Popup Handler] AVISO: Não foi possível fechar o pop-up SweetAlert.")
             
     except TimeoutException:
-        # Caso bom: nenhum pop-up apareceu dentro do tempo de espera.
         print("    [Popup Handler] Nenhum pop-up SweetAlert detectado.")
 
-def capture_popup_content(driver: webdriver.Chrome):
-    """Captura quaisquer pop-ups, alertas ou mensagens de erro visíveis."""
-    popup_info = {"found": False, "type": None, "text": None}
+def capture_popup_content(driver: webdriver.Chrome, timeout: int = 5) -> dict:
+    """Captura o texto de qualquer pop-up visível, priorizando SweetAlerts."""
+    wait = WebDriverWait(driver, timeout)
     try:
-        alert = driver.switch_to.alert
-        popup_info.update({"found": True, "type": "browser_alert", "text": alert.text})
-        print(f"\n[POPUP] ALERTA DO NAVEGADOR DETECTADO: {alert.text}")
-        return popup_info
-    except:
-        pass
-
-    popup_selectors = [
-        "//*[contains(@class, 'swal2-container')]",
-        "//*[contains(@class, 'toast')]",
-        "//div[contains(@class, 'alert')]",
-    ]
-    for selector in popup_selectors:
-        try:
-            elements = driver.find_elements(By.XPATH, selector)
-            for element in elements:
-                if element.is_displayed():
-                    text = element.text.strip()
-                    if text:
-                        popup_info.update({"found": True, "type": "modal/popup", "text": text})
-                        print(f"\n[POPUP] MODAL/POPUP DETECTADO: {text}")
-                        return popup_info
-        except:
-            continue
-    return popup_info
-
+        # Prioriza a busca por pop-ups de sucesso ou erro do SweetAlert
+        popup_element = wait.until(EC.visibility_of_element_located((By.XPATH, "//*[contains(@class, 'swal2-container')] | //div[contains(@class, 'alert')] | //*[contains(@class, 'toast')]")))
+        text = popup_element.text.strip()
+        print(f"[CAPTURE] Pop-up detectado com a mensagem: '{text}'")
+        return {"found": True, "text": text}
+    except TimeoutException:
+        print("[CAPTURE] Nenhum pop-up detectado.")
+        return {"found": False, "text": ""}
 
 def create_appointment(
     driver: webdriver.Chrome,
@@ -205,22 +144,12 @@ def create_appointment(
     timeout: int = 15,
     delay: float = 0.0,
 ) -> None:
-    """Preenche o formulário de agendamento com os valores fornecidos e salva."""
+    """Preenche e salva o formulário de agendamento, com validação de sucesso no final."""
     wait = WebDriverWait(driver, timeout)
-    new_appointment_btn = wait.until(
-        EC.element_to_be_clickable((By.XPATH, '//button[contains(., "Novo agendamento")]'))
-    )
+    new_appointment_btn = wait.until(EC.element_to_be_clickable((By.XPATH, '//button[contains(., "Novo agendamento")]')))
     new_appointment_btn.click()
-    if delay > 0:
-        time.sleep(delay)
-
     wait.until(EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "modal-agendamento")]')))
     print("✓ Modal de agendamento aberto.")
-    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'select[aria-invalid]')))
-    print("✓ Campos do formulário carregados.")
-    log_datetime_fields(driver, "Após abrir o modal")
-
-    # --- INÍCIO DA ORDEM DE PREENCHIMENTO ---
 
     print("\n1. Selecionando tipo de agendamento...")
     select_dropdown_option(driver, (By.CSS_SELECTOR, 'select[aria-invalid]'), "Agendamento")
@@ -228,32 +157,25 @@ def create_appointment(
     print("\n2. Selecionando cliente...")
     autocomplete_select(driver, (By.ID, "age_id_cliente"), client_name)
     time.sleep(1)
-    log_datetime_fields(driver, "Após selecionar o cliente")
-    
+
     print("\n3. Definindo data e horários...")
     try:
         dt = datetime.strptime(date, "%Y-%m-%d")
-    except:
+    except ValueError:
         dt = datetime.strptime(date, "%d/%m/%Y")
     
-    try:
-        date_input = driver.find_element(By.NAME, "age_data")
-        date_input.click(); time.sleep(0.2)
-        date_input.clear(); time.sleep(0.2)
-        date_input.send_keys(dt.strftime("%d/%m/%Y")); time.sleep(0.3)
+    date_input = driver.find_element(By.NAME, "age_data")
+    date_input.clear()
+    date_input.send_keys(dt.strftime("%d%m%Y")) # Formato mais direto
 
-        start_input = driver.find_element(By.NAME, "age_inicio")
-        start_input.click(); time.sleep(0.2)
-        start_input.clear(); time.sleep(0.2)
-        start_input.send_keys(start_time); time.sleep(0.3)
+    start_input = driver.find_element(By.NAME, "age_inicio")
+    start_input.clear()
+    start_input.send_keys(start_time)
 
-        end_input = driver.find_element(By.NAME, "age_fim")
-        end_input.click(); time.sleep(0.2)
-        end_input.clear(); time.sleep(0.2)
-        end_input.send_keys(end_time); time.sleep(0.3)
-        log_datetime_fields(driver, "Após definir data/hora")
-    except Exception as e:
-        print(f"⚠️ Erro ao definir campos de data/hora: {e}")
+    end_input = driver.find_element(By.NAME, "age_fim")
+    end_input.clear()
+    end_input.send_keys(end_time)
+    print("    Data e horários definidos.")
 
     print("\n4. Selecionando filial...")
     select_dropdown_option(driver, (By.XPATH, "//div[div[contains(text(), 'Filial')]]//select"), branch_name)
@@ -266,10 +188,7 @@ def create_appointment(
     for service in services:
         print(f"    Adicionando: {service}")
         autocomplete_select(driver, (By.ID, "id_usuario_servico"), service)
-        
-        # Chama a função de fallback para fechar pop-ups
         handle_sweetalert_popup(driver)
-
         try:
             plus_btn_locator = (By.XPATH, "//input[@id='id_usuario_servico']/ancestor::div[contains(@class, 'col-sm-11')]/following-sibling::div[contains(@class, 'col-sm-1')]//button")
             plus_btn = wait.until(EC.element_to_be_clickable(plus_btn_locator))
@@ -277,49 +196,50 @@ def create_appointment(
             print("    Botão '+' clicado.")
             time.sleep(1)
         except Exception as e:
-            print(f"    Falha ao clicar no botão '+' mesmo após o tratamento do pop-up: {e}")
-            popup = capture_popup_content(driver)
-            if popup["found"]:
-                raise Exception(f"Erro final ao adicionar serviço. Pop-up encontrado: '{popup['text']}'")
-            else:
-                raise
+            raise Exception(f"Falha final ao adicionar serviço após tratar pop-up: {e}")
 
-    log_datetime_fields(driver, "FINAL - Antes de salvar")
-
-    # 7. Salvar
     print("\n7. Salvando agendamento...")
     try:
         save_btn = driver.find_element(By.XPATH, '//button[contains(., "Salvar agendamento")]')
         save_btn.click()
-        print("✓ Clicou em salvar.")
-        time.sleep(3)
-        
-        # Verificação final
-        try:
-            wait.until(EC.invisibility_of_element_located((By.XPATH, '//div[contains(@class, "modal-agendamento")]')))
-            print("✓ Agendamento salvo com sucesso (modal fechou).")
-        except TimeoutException:
-            popup = capture_popup_content(driver)
-            if popup['found'] and any(keyword in popup['text'].lower() for keyword in ['erro', 'falha', 'inválido']):
-                 raise Exception(f"Erro após salvar: {popup['text']}")
+        print("✓ Clicou em 'Salvar agendamento'. Aguardando resultado...")
+
+        # --- NOVA LÓGICA DE VALIDAÇÃO ---
+        final_popup = capture_popup_content(driver, timeout=10)
+
+        if final_popup["found"]:
+            # Verifica se a mensagem de sucesso está presente
+            if "agendamento criado" in final_popup["text"].lower():
+                print(f"✓ SUCESSO! Mensagem de confirmação recebida: '{final_popup['text']}'")
+                # Se houver um botão de fechar/voltar, podemos clicar nele
+                try:
+                    close_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Voltar para a agenda')]")
+                    close_button.click()
+                except NoSuchElementException:
+                    pass # Se não houver botão, tudo bem.
+                return # Retorna sucesso
             else:
-                print("⚠️ Modal não fechou, mas nenhum erro explícito foi detectado. Considerado sucesso.")
-            
+                # Se encontrou um pop-up, mas não é o de sucesso, é um erro.
+                raise Exception(f"Ocorreu um erro inesperado após salvar. Mensagem: '{final_popup['text']}'")
+        else:
+            # Se nenhum pop-up apareceu, o resultado é incerto.
+            raise Exception("O agendamento foi salvo, mas nenhuma mensagem de confirmação ou erro foi detectada.")
+
     except Exception as e:
-        print(f"\n✗ Erro ao salvar: {e}")
+        print(f"\n✗ Erro durante o processo de salvar: {e}")
         driver.save_screenshot('/tmp/error_save.png')
         raise
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Automatiza o agendamento no CashBarber.")
-    parser.add_argument("--email", required=True, help="E-mail de login do CashBarber")
-    parser.add_argument("--password", required=True, help="Senha de login do CashBarber")
-    parser.add_argument("--client", required=True, help="Nome do cliente para agendamento")
-    parser.add_argument("--date", required=True, help="Data do agendamento (YYYY-MM-DD ou DD/MM/YYYY)")
-    parser.add_argument("--start-time", required=True, help="Hora de início (HH:MM, 24h)")
-    parser.add_argument("--end-time", required=True, help="Hora de término (HH:MM, 24h)")
-    parser.add_argument("--branch", required=True, help="Nome da filial")
-    parser.add_argument("--professional", required=True, help="Nome do profissional")
+    parser.add_argument("--email", required=True)
+    parser.add_argument("--password", required=True)
+    parser.add_argument("--client", required=True)
+    parser.add_argument("--date", required=True)
+    parser.add_argument("--start-time", required=True)
+    parser.add_argument("--end-time", required=True)
+    parser.add_argument("--branch", required=True)
+    parser.add_argument("--professional", required=True)
     parser.add_argument("--service", action="append", dest="services", required=True)
     parser.add_argument("--show-browser", action="store_true")
     parser.add_argument("--delay", type=float, default=0.0)
@@ -348,7 +268,7 @@ def main() -> None:
             services=args.services,
             delay=args.delay,
         )
-        print("\n✓ Agendamento criado com sucesso.")
+        # A mensagem de sucesso agora é impressa dentro da função create_appointment
     except Exception as exc:
         print(f"\n✗ Ocorreu um erro: {exc}", file=sys.stderr)
         try:
@@ -358,10 +278,9 @@ def main() -> None:
             print("Captura de tela e HTML da página salvos.")
         except:
             print("Não foi possível salvar os artefatos de erro.")
-        raise
+        raise # Propaga a exceção para que o N8N a capture
     finally:
         driver.quit()
-
 
 if __name__ == "__main__":
     main()
